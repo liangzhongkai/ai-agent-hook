@@ -1,0 +1,17 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 1000
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[rpc_endpoints]
+xlayer_testnet = "https://testrpc.xlayer.tech"
+xlayer_mainnet = "https://rpc.xlayer.tech"
+
+# 部署时使用：
+# forge script script/Deploy.s.sol --rpc-url xlayer_testnet --broadcast -vvvv
