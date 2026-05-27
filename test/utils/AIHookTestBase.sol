@@ -14,17 +14,21 @@ import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {AIHook} from "../../src/AIHook.sol";
 import {VxHookToken} from "../../src/VxHookToken.sol";
 import {AgentRegistry} from "../../src/AgentRegistry.sol";
+import {AgentDecisionNFT} from "../../src/AgentDecisionNFT.sol";
 
 /// @notice Shared setup and helpers for AIHook integration tests
 abstract contract AIHookTestBase is Test, Deployers {
     using LPFeeLibrary for uint24;
 
     uint256 internal constant ORACLE_PK = 0xA11CE;
-    uint160 internal constant HOOK_FLAGS = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+    uint160 internal constant HOOK_FLAGS = uint160(
+        Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG
+    );
 
     AIHook internal hook;
     VxHookToken internal token;
     AgentRegistry internal registry;
+    AgentDecisionNFT internal decisionNFT;
 
     address internal aiOracle;
     address internal insuranceFund;
@@ -41,16 +45,25 @@ abstract contract AIHookTestBase is Test, Deployers {
 
         token = new VxHookToken();
         registry = new AgentRegistry();
+        decisionNFT = new AgentDecisionNFT();
 
         address hookAddr = address(uint160(uint256(type(uint160).max) & clearAllHookPermissionsMask | HOOK_FLAGS));
         deployCodeTo(
             "AIHook.sol:AIHook",
-            abi.encode(manager, aiOracle, address(registry), address(token), insuranceFund),
+            abi.encode(
+                manager,
+                aiOracle,
+                address(registry),
+                address(token),
+                address(decisionNFT),
+                insuranceFund
+            ),
             hookAddr
         );
 
         hook = AIHook(hookAddr);
         token.setMinter(hookAddr);
+        decisionNFT.setMinter(hookAddr);
         registry.transferOwnership(hookAddr);
     }
 

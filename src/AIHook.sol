@@ -15,6 +15,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 import {IAgentRegistry} from "./AgentRegistry.sol";
 import {IVxHookToken} from "./VxHookToken.sol";
+import {IAgentDecisionNFT} from "./AgentDecisionNFT.sol";
 
 contract AIHook is BaseHook, Ownable {
     using ECDSA for bytes32;
@@ -38,6 +39,11 @@ contract AIHook is BaseHook, Ownable {
     uint256 public constant REFERRAL_SHARE_BIPS = 1500; // 15%
     uint256 public constant INSURANCE_FUND_BIPS = 2000; // 20%
 
+    // 战绩积分稀有度系数（100 = 1x）
+    uint256 public constant RARITY_CALM_BPS = 100;
+    uint256 public constant RARITY_EXTREME_BPS = 500;
+    uint256 public constant EARLY_LP_BONUS = 10_000;
+
     // AI 预言机地址（可更新）
     address public aiOracle;
 
@@ -47,23 +53,37 @@ contract AIHook is BaseHook, Ownable {
     // 治理代币
     IVxHookToken public rewardToken;
 
+    // AI 决策 NFT
+    IAgentDecisionNFT public decisionNFT;
+
     // 互保基金接收地址
     address public insuranceFund;
+
+    // 用户战绩积分
+    mapping(address => uint256) public battlePoints;
+
+    // 早期 LP 加成是否已领取
+    mapping(address => bool) public lpBonusClaimed;
 
     event FeeAdjusted(bytes32 indexed poolId, uint24 fee, uint256 riskScore);
     event ReferralRewarded(address indexed referrer, uint256 amount);
     event InsuranceFundCharged(uint256 amount);
+    event DecisionNFTMinted(address indexed trader, uint256 tokenId, uint256 riskScore);
+    event BattlePointsAwarded(address indexed trader, uint256 points, uint256 total);
+    event EarlyLPBonusAwarded(address indexed lp, uint256 bonus, uint256 total);
 
     constructor(
         IPoolManager _poolManager,
         address _aiOracle,
         address _agentRegistry,
         address _rewardToken,
+        address _decisionNFT,
         address _insuranceFund
     ) BaseHook(_poolManager) Ownable(msg.sender) {
         aiOracle = _aiOracle;
         agentRegistry = IAgentRegistry(_agentRegistry);
         rewardToken = IVxHookToken(_rewardToken);
+        decisionNFT = IAgentDecisionNFT(_decisionNFT);
         insuranceFund = _insuranceFund;
     }
 
@@ -78,7 +98,7 @@ contract AIHook is BaseHook, Ownable {
                 beforeInitialize: false,
                 afterInitialize: false,
                 beforeAddLiquidity: false,
-                afterAddLiquidity: false,
+                afterAddLiquidity: true,
                 beforeRemoveLiquidity: false,
                 afterRemoveLiquidity: false,
                 beforeSwap: true,
@@ -99,7 +119,6 @@ contract AIHook is BaseHook, Ownable {
         IPoolManager.SwapParams calldata,
         bytes calldata hookData
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-        // 解析传入的 hookData：签名 + 编码参数
         (bytes memory signature, bytes memory data) = abi.decode(
             hookData,
             (bytes, bytes)
@@ -111,10 +130,8 @@ contract AIHook is BaseHook, Ownable {
             uint256 deadline
         ) = abi.decode(data, (uint256, address, address, uint256));
 
-        // 检查签名是否过期
         if (block.timestamp > deadline) revert ExpiredSignature();
 
-        // 验证 AI 预言机签名
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19Ethereum Signed Message:\n32",
@@ -124,22 +141,18 @@ contract AIHook is BaseHook, Ownable {
         address signer = digest.recover(signature);
         if (signer != aiOracle) revert InvalidSignature();
 
-        // 若发起交易的 agent 已注册，检查其信誉是否过低（可选拦截）
         if (agent != address(0) && agentRegistry.isRegistered(agent)) {
             if (agentRegistry.reputation(agent) < 100) {
-                // 信誉极低，可拒绝交易（实际可设更低门槛）
                 revert("Agent reputation too low");
             }
         }
 
-        // 根据风险评分计算动态费率
         uint24 dynamicFee;
         if (riskScore <= LOW_RISK_THRESHOLD) {
             dynamicFee = MIN_FEE;
         } else if (riskScore >= HIGH_RISK_THRESHOLD) {
             dynamicFee = MAX_FEE;
         } else {
-            // 线性插值计算费率（1000 - 15000 之间）
             dynamicFee = uint24(
                 MIN_FEE +
                     ((riskScore - LOW_RISK_THRESHOLD) * (MAX_FEE - MIN_FEE)) /
@@ -149,7 +162,6 @@ contract AIHook is BaseHook, Ownable {
 
         emit FeeAdjusted(keccak256(abi.encode(key)), dynamicFee, riskScore);
 
-        // 返回覆盖后的费率（需带 OVERRIDE_FEE_FLAG 才能在动态费率池中生效）
         return (
             IHooks.beforeSwap.selector,
             BeforeSwapDeltaLibrary.ZERO_DELTA,
@@ -157,56 +169,115 @@ contract AIHook is BaseHook, Ownable {
         );
     }
 
-    // ---------- 交易后分润与信誉更新 ----------
+    // ---------- 交易后：NFT 铸造 + 积分 + 分润 ----------
     function _afterSwap(
-        address,
-        PoolKey calldata,
+        address sender,
+        PoolKey calldata key,
         IPoolManager.SwapParams calldata,
         BalanceDelta swapDelta,
         bytes calldata hookData
     ) internal override returns (bytes4, int128) {
-        // 从 hookData 中恢复 beforeSwap 时保存的数据（此处通过传入的 hookData 再次获取）
-        // 注：Uniswap v4 中 afterSwap 的 hookData 与 beforeSwap 相同，由用户传入
+        (uint256 riskScore, address agent, address referrer) = _decodeHookData(hookData);
+
+        uint256 swapVolume = _swapVolume(swapDelta);
+        _handleFeeRewards(referrer, swapVolume);
+        _updateAgentReputation(agent, riskScore);
+        _mintDecisionAndPoints(sender, key, riskScore, swapVolume);
+
+        return (IHooks.afterSwap.selector, 0);
+    }
+
+    function _decodeHookData(bytes calldata hookData)
+        internal
+        pure
+        returns (uint256 riskScore, address agent, address referrer)
+    {
         (, bytes memory data) = abi.decode(hookData, (bytes, bytes));
-        (
-            uint256 riskScore,
-            address agent,
-            address referrer,
-            uint256 deadline
-        ) = abi.decode(data, (uint256, address, address, uint256));
+        uint256 deadline;
+        (riskScore, agent, referrer, deadline) = abi.decode(data, (uint256, address, address, uint256));
+        deadline;
+    }
 
-        // 计算此笔交易产生的手续费总额（以 token0 或 token1 计？需根据 pool 实际 fee 量）
-        // 简化处理：假定手续费用池子的某种计价方式，这里直接从 delta 中提取
-        // 实际应更精确计算，但此处仅为演示核心机制
-        int128 delta0 = swapDelta.amount0();
-        uint256 feeAmount = delta0 < 0 ? uint256(uint128(-delta0)) / 100 : 0; // 模拟：取负值部分的 1% 作为费用贡献
+    function _swapVolume(BalanceDelta swapDelta) internal pure returns (uint256) {
+        uint256 vol0 = _abs128(swapDelta.amount0());
+        uint256 vol1 = _abs128(swapDelta.amount1());
+        return vol0 > vol1 ? vol0 : vol1;
+    }
 
-        // 1. 互保基金扣留（风险溢价部分）
+    function _handleFeeRewards(address referrer, uint256 swapVolume) internal {
+        uint256 feeAmount = swapVolume / 100;
+        if (feeAmount == 0) return;
+
         uint256 insuranceCut = (feeAmount * INSURANCE_FUND_BIPS) / 10000;
         if (insuranceCut > 0) {
-            // 从池子中提取对应代币并转入保险库（需实现复杂转账逻辑，此处简化说明）
-            // 实际需调用 poolManager.take 等，暂略
             emit InsuranceFundCharged(insuranceCut);
         }
 
-        // 2. 推荐人奖励（铸造治理代币）
-        if (referrer != address(0) && feeAmount > 0) {
+        if (referrer != address(0)) {
             uint256 rewardAmount = (feeAmount * REFERRAL_SHARE_BIPS) / 10000;
             rewardToken.mint(referrer, rewardAmount);
             emit ReferralRewarded(referrer, rewardAmount);
         }
+    }
 
-        // 3. 更新 agent 信誉（若 agent 已注册）
-        if (agent != address(0) && agentRegistry.isRegistered(agent)) {
-            // 根据风险评分调整信誉：低风险订单流提升信誉，反之降低
-            if (riskScore <= LOW_RISK_THRESHOLD) {
-                agentRegistry.increaseReputation(agent, 1);
-            } else if (riskScore >= HIGH_RISK_THRESHOLD) {
-                agentRegistry.decreaseReputation(agent, 5);
-            }
+    function _updateAgentReputation(address agent, uint256 riskScore) internal {
+        if (agent == address(0) || !agentRegistry.isRegistered(agent)) return;
+        if (riskScore <= LOW_RISK_THRESHOLD) {
+            agentRegistry.increaseReputation(agent, 1);
+        } else if (riskScore >= HIGH_RISK_THRESHOLD) {
+            agentRegistry.decreaseReputation(agent, 5);
         }
+    }
 
-        return (IHooks.afterSwap.selector, 0);
+    function _mintDecisionAndPoints(
+        address trader,
+        PoolKey calldata key,
+        uint256 riskScore,
+        uint256 swapVolume
+    ) internal {
+        uint256 tokenId = decisionNFT.mintDecision(
+            trader, riskScore, swapVolume, keccak256(abi.encode(key))
+        );
+        emit DecisionNFTMinted(trader, tokenId, riskScore);
+
+        uint256 points = (swapVolume * _rarityMultiplier(riskScore)) / 100;
+        if (points > 0) {
+            battlePoints[trader] += points;
+            emit BattlePointsAwarded(trader, points, battlePoints[trader]);
+        }
+    }
+
+    // ---------- 早期 LP 加成积分 ----------
+    function _afterAddLiquidity(
+        address sender,
+        PoolKey calldata,
+        IPoolManager.ModifyLiquidityParams calldata,
+        BalanceDelta,
+        BalanceDelta,
+        bytes calldata
+    ) internal override returns (bytes4, BalanceDelta) {
+        if (!lpBonusClaimed[sender]) {
+            lpBonusClaimed[sender] = true;
+            battlePoints[sender] += EARLY_LP_BONUS;
+            emit EarlyLPBonusAwarded(sender, EARLY_LP_BONUS, battlePoints[sender]);
+        }
+        return (IHooks.afterAddLiquidity.selector, BalanceDelta.wrap(0));
+    }
+
+    function _rarityMultiplier(uint256 riskScore) internal pure returns (uint256) {
+        if (riskScore <= LOW_RISK_THRESHOLD) {
+            return RARITY_CALM_BPS;
+        }
+        if (riskScore >= HIGH_RISK_THRESHOLD) {
+            return RARITY_EXTREME_BPS;
+        }
+        return RARITY_CALM_BPS +
+            ((riskScore - LOW_RISK_THRESHOLD) * (RARITY_EXTREME_BPS - RARITY_CALM_BPS)) /
+            (HIGH_RISK_THRESHOLD - LOW_RISK_THRESHOLD);
+    }
+
+    function _abs128(int128 x) internal pure returns (uint256) {
+        return x < 0 ? uint256(uint128(-x)) : uint256(uint128(x));
     }
 
     // ---------- 管理函数 ----------

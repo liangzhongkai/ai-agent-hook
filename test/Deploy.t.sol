@@ -10,6 +10,7 @@ import {DeployXLayer} from "../script/Deploy.s.sol";
 import {AIHook} from "../src/AIHook.sol";
 import {VxHookToken} from "../src/VxHookToken.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
+import {AgentDecisionNFT} from "../src/AgentDecisionNFT.sol";
 
 contract DeployTest is Test {
     address internal constant AI_ORACLE =
@@ -29,12 +30,13 @@ contract DeployTest is Test {
     function test_hookAddress_hasRequiredFlags() public view {
         assertTrue(uint160(helper.hookAddress()) & Hooks.BEFORE_SWAP_FLAG != 0);
         assertTrue(uint160(helper.hookAddress()) & Hooks.AFTER_SWAP_FLAG != 0);
+        assertTrue(uint160(helper.hookAddress()) & Hooks.AFTER_ADD_LIQUIDITY_FLAG != 0);
     }
 
     function test_deploySystem_wiresContracts() public {
         PoolManager manager = new PoolManager(address(this));
 
-        (VxHookToken token, AgentRegistry registry, AIHook hook) = helper
+        (VxHookToken token, AgentRegistry registry, AgentDecisionNFT nft, AIHook hook) = helper
             .deploySystem(
                 IPoolManager(address(manager)),
                 AI_ORACLE,
@@ -45,7 +47,9 @@ contract DeployTest is Test {
         assertEq(hook.insuranceFund(), INSURANCE_FUND);
         assertEq(address(hook.agentRegistry()), address(registry));
         assertEq(address(hook.rewardToken()), address(token));
+        assertEq(address(hook.decisionNFT()), address(nft));
         assertTrue(token.hasRole(token.MINTER_ROLE(), address(hook)));
+        assertTrue(nft.hasRole(nft.MINTER_ROLE(), address(hook)));
         assertEq(registry.owner(), address(hook));
     }
 

@@ -44,12 +44,14 @@ contract BaseHookTest is AIHookTestBase {
         hook.beforeAddLiquidity(address(this), poolKey, LIQUIDITY_PARAMS, ZERO_BYTES);
     }
 
-    function test_afterAddLiquidity_revertsHookNotImplemented() public {
+    function test_afterAddLiquidity_awardsEarlyLPBonus() public {
+        address lp = makeAddr("lp");
         vm.prank(address(manager));
-        vm.expectRevert(BaseHook.HookNotImplemented.selector);
         hook.afterAddLiquidity(
-            address(this), poolKey, LIQUIDITY_PARAMS, BalanceDelta.wrap(0), BalanceDelta.wrap(0), ZERO_BYTES
+            lp, poolKey, LIQUIDITY_PARAMS, BalanceDelta.wrap(0), BalanceDelta.wrap(0), ZERO_BYTES
         );
+        assertEq(hook.battlePoints(lp), hook.EARLY_LP_BONUS());
+        assertTrue(hook.lpBonusClaimed(lp));
     }
 
     function test_beforeRemoveLiquidity_revertsHookNotImplemented() public {

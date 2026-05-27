@@ -32,6 +32,7 @@ contract AIHookTest is AIHookTestBase {
         assertEq(hook.aiOracle(), aiOracle);
         assertEq(address(hook.agentRegistry()), address(registry));
         assertEq(address(hook.rewardToken()), address(token));
+        assertEq(address(hook.decisionNFT()), address(decisionNFT));
         assertEq(hook.insuranceFund(), insuranceFund);
         assertEq(hook.owner(), address(this));
     }
@@ -41,7 +42,7 @@ contract AIHookTest is AIHookTestBase {
         assertFalse(permissions.beforeInitialize);
         assertFalse(permissions.afterInitialize);
         assertFalse(permissions.beforeAddLiquidity);
-        assertFalse(permissions.afterAddLiquidity);
+        assertTrue(permissions.afterAddLiquidity);
         assertFalse(permissions.beforeRemoveLiquidity);
         assertFalse(permissions.afterRemoveLiquidity);
         assertTrue(permissions.beforeSwap);
@@ -183,6 +184,8 @@ contract AIHookTest is AIHookTestBase {
         callAfterSwap(poolKey, swapDelta, hookData);
 
         assertEq(token.balanceOf(referrer), 15);
+        assertEq(decisionNFT.ownerOf(0), address(this));
+        assertEq(hook.battlePoints(address(this)), 10000);
     }
 
     function test_afterSwap_skipsReferralWhenZeroAddress() public {
@@ -251,7 +254,56 @@ contract AIHookTest is AIHookTestBase {
         assertEq(registry.reputation(agent), 0);
     }
 
-    // ---------- full swap integration ----------
+    function test_afterSwap_awardsExtremeRarityPoints() public {
+        bytes memory hookData = encodeHookData(
+            9000,
+            address(0),
+            address(0),
+            block.timestamp + 1 hours
+        );
+        BalanceDelta swapDelta = BalanceDelta.wrap(-10000 << 128);
+        callAfterSwap(poolKey, swapDelta, hookData);
+        // 10000 volume * 500 bps / 100 = 50000
+        assertEq(hook.battlePoints(address(this)), 50000);
+    }
+
+    function test_afterSwap_mintsDecisionNFTWithMetadata() public {
+        uint256 riskScore = 9000;
+        bytes memory hookData = encodeHookData(
+            riskScore,
+            address(0),
+            address(0),
+            block.timestamp + 1 hours
+        );
+        BalanceDelta swapDelta = BalanceDelta.wrap(-10000 << 128);
+        callAfterSwap(poolKey, swapDelta, hookData);
+
+        (
+            uint256 storedRisk,
+            uint256 storedVolume,
+            ,
+            uint256 storedTime
+        ) = decisionNFT.decisions(0);
+        assertEq(storedRisk, riskScore);
+        assertEq(storedVolume, 10000);
+        assertEq(storedTime, block.timestamp);
+
+        string memory uri = decisionNFT.tokenURI(0);
+        assertTrue(bytes(uri).length > 0);
+    }
+
+    function test_afterAddLiquidity_awardsEarlyLPBonusOnce() public {
+        address lp = makeAddr("earlyLP");
+        vm.startPrank(address(manager));
+        hook.afterAddLiquidity(
+            lp, poolKey, LIQUIDITY_PARAMS, BalanceDelta.wrap(0), BalanceDelta.wrap(0), ZERO_BYTES
+        );
+        hook.afterAddLiquidity(
+            lp, poolKey, LIQUIDITY_PARAMS, BalanceDelta.wrap(0), BalanceDelta.wrap(0), ZERO_BYTES
+        );
+        vm.stopPrank();
+        assertEq(hook.battlePoints(lp), hook.EARLY_LP_BONUS());
+    }
 
     function test_swap_withValidOracleSignature_succeeds() public {
         registerAgent(agent);
@@ -267,6 +319,8 @@ contract AIHookTest is AIHookTestBase {
         assertGt(delta.amount1(), 0);
         assertEq(token.balanceOf(referrer), 15);
         assertEq(registry.reputation(agent), 501);
+        assertEq(decisionNFT.balanceOf(address(swapRouter)), 1);
+        assertGt(hook.battlePoints(address(swapRouter)), 0);
     }
 
     function test_swap_usesHookOverrideFeeInSwapEvent() public {

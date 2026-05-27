@@ -7,6 +7,7 @@ import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {AIHook} from "../src/AIHook.sol";
 import {VxHookToken} from "../src/VxHookToken.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
+import {AgentDecisionNFT} from "../src/AgentDecisionNFT.sol";
 import {HookMiner} from "./HookMiner.sol";
 
 contract DeployXLayer is Script {
@@ -15,8 +16,9 @@ contract DeployXLayer is Script {
     address constant INSURANCE_FUND =
         0xdC67b12624a55F09Feea390E106e156c32868506;
 
-    uint160 internal constant HOOK_FLAGS =
-        uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+    uint160 internal constant HOOK_FLAGS = uint160(
+        Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG
+    );
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -25,6 +27,7 @@ contract DeployXLayer is Script {
 
         VxHookToken rewardToken = new VxHookToken();
         AgentRegistry agentRegistry = new AgentRegistry();
+        AgentDecisionNFT decisionNFT = new AgentDecisionNFT();
 
         vm.stopBroadcast();
 
@@ -33,6 +36,7 @@ contract DeployXLayer is Script {
             AI_ORACLE,
             address(agentRegistry),
             address(rewardToken),
+            address(decisionNFT),
             INSURANCE_FUND
         );
 
@@ -50,6 +54,7 @@ contract DeployXLayer is Script {
             AI_ORACLE,
             address(agentRegistry),
             address(rewardToken),
+            address(decisionNFT),
             INSURANCE_FUND
         );
         require(
@@ -58,12 +63,14 @@ contract DeployXLayer is Script {
         );
 
         rewardToken.setMinter(address(hook));
+        decisionNFT.setMinter(address(hook));
         agentRegistry.transferOwnership(address(hook));
 
         vm.stopBroadcast();
 
         console.log("VxHookToken deployed at:", address(rewardToken));
         console.log("AgentRegistry deployed at:", address(agentRegistry));
+        console.log("AgentDecisionNFT deployed at:", address(decisionNFT));
         console.log("AIHook deployed at:", address(hook));
     }
 }

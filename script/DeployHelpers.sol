@@ -7,11 +7,14 @@ import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {AIHook} from "../src/AIHook.sol";
 import {VxHookToken} from "../src/VxHookToken.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
+import {AgentDecisionNFT} from "../src/AgentDecisionNFT.sol";
 
 /// @notice Shared deployment logic for scripts and tests.
 /// @dev Uses deployCodeTo to place the hook at a permission-valid address (local/test only).
 contract DeployHelpers is StdCheats {
-    uint160 internal constant HOOK_FLAGS = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+    uint160 internal constant HOOK_FLAGS = uint160(
+        Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG
+    );
     uint160 internal constant CLEAR_HOOK_FLAGS_MASK = ~uint160((1 << 14) - 1);
 
     function hookAddress() public pure returns (address) {
@@ -20,20 +23,29 @@ contract DeployHelpers is StdCheats {
 
     function deploySystem(IPoolManager poolManager, address aiOracle, address insuranceFund)
         external
-        returns (VxHookToken rewardToken, AgentRegistry agentRegistry, AIHook hook)
+        returns (VxHookToken rewardToken, AgentRegistry agentRegistry, AgentDecisionNFT decisionNFT, AIHook hook)
     {
         rewardToken = new VxHookToken();
         agentRegistry = new AgentRegistry();
+        decisionNFT = new AgentDecisionNFT();
 
         address hookAddr = hookAddress();
         deployCodeTo(
             "AIHook.sol:AIHook",
-            abi.encode(poolManager, aiOracle, address(agentRegistry), address(rewardToken), insuranceFund),
+            abi.encode(
+                poolManager,
+                aiOracle,
+                address(agentRegistry),
+                address(rewardToken),
+                address(decisionNFT),
+                insuranceFund
+            ),
             hookAddr
         );
         hook = AIHook(hookAddr);
 
         rewardToken.setMinter(hookAddr);
+        decisionNFT.setMinter(hookAddr);
         agentRegistry.transferOwnership(hookAddr);
     }
 }
