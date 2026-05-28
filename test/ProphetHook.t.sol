@@ -280,29 +280,6 @@ contract ProphetHookTest is ProphetHookTestBase {
         assertGt(uint256(pot0Next), 0, "unwon pot should roll forward");
     }
 
-    // -------- agent multiplier --------
-
-    function test_agentMultiplier_boostsScore() public {
-        // register alice as an AI agent (the registry will be owned by us in tests)
-        vm.deal(alice, 1 ether);
-        vm.prank(alice);
-        registry.register{value: 0.1 ether}();
-
-        swap(poolKey, true, -1_000_000, encodeTrader(alice));
-        // bob is unregistered baseline
-        swap(poolKey, true, -1_000_000, encodeTrader(bob));
-
-        rollPastEpoch(DEFAULT_EPOCH_BLOCKS);
-        hook.settleEpoch(poolKey, 0);
-
-        int256 aliceScoreBoosted = hook.claim(poolKey, 0, alice);
-        int256 bobScore = hook.claim(poolKey, 0, bob);
-
-        // alice and bob have same notional & same tick approx, but alice has rep=500 → 1.025x multiplier
-        // we expect alice's score >= bob's score, with strict greater when multiplier applies
-        assertGe(aliceScoreBoosted, bobScore);
-    }
-
     // -------- preview --------
 
     function test_previewScore_returnsZeroBeforeSettlement() public {

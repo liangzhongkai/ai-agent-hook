@@ -14,7 +14,6 @@ import {ProphetHook} from "../../src/ProphetHook.sol";
 import {ProphetCard} from "../../src/ProphetCard.sol";
 import {AlphaToken, IAlphaToken} from "../../src/AlphaToken.sol";
 import {AlphaStaking} from "../../src/AlphaStaking.sol";
-import {AgentRegistry} from "../../src/AgentRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @notice Shared setUp + helpers for ProphetHook tests.
@@ -33,7 +32,6 @@ abstract contract ProphetHookTestBase is Test, Deployers {
 
     ProphetHook internal hook;
     AlphaToken internal alpha;
-    AgentRegistry internal registry;
     ProphetCard internal card;
     AlphaStaking internal staking;
 
@@ -49,14 +47,13 @@ abstract contract ProphetHookTestBase is Test, Deployers {
         deployFreshManagerAndRouters();
 
         alpha = new AlphaToken();
-        registry = new AgentRegistry();
         card = new ProphetCard();
         staking = new AlphaStaking(IAlphaToken(address(alpha)));
 
         address hookAddr = address(uint160(uint256(type(uint160).max) & clearAllHookPermissionsMask | HOOK_FLAGS));
         deployCodeTo(
             "ProphetHook.sol:ProphetHook",
-            abi.encode(manager, address(alpha), address(registry), address(card)),
+            abi.encode(manager, address(alpha), address(card), address(this)),
             hookAddr
         );
         hook = ProphetHook(hookAddr);

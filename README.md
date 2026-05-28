@@ -7,12 +7,10 @@ A Uniswap v4 hook submission for **OKX X Layer / Uniswap / Flap — "Hook the Fu
 
 ---
 
-## 一句话机制
+## 机制简介
 
 每一笔 swap 都是一份隐式的方向性预测。Hook 在每个 epoch 结束时用 **池子自身的 tick 行为**
 作为真相回收答案，**猜对的交易者瓜分被猜错者掏出的费用**，并铸造一张随成绩成长的链上 SVG「先知卡」SBT。
-
-## 为什么这是一个新机制（不是已有协议的移植）
 
 | 维度                        | 现有 Hook 流派          | 本机制                                                |
 | --------------------------- | ----------------------- | ----------------------------------------------------- |
@@ -31,7 +29,6 @@ src/
   ProphetCard.sol      ← 灵魂绑定 NFT，链上 SVG 渲染先知卡（致敬 uPEG）
   AlphaToken.sol       ← $ALPHA 治理 / 奖励代币（带 1 亿硬顶）
   AlphaStaking.sol     ← $ALPHA 质押（多币种奖励 + 计分乘数 + 抽水折扣）
-  AgentRegistry.sol    ← AI Agent 注册 + 质押，注册的 agent 享受 1.00x~1.50x 计分乘数
   base/BaseHook.sol    ← v4 BaseHook 标准基类
 script/
   Deploy.s.sol         ← 一键部署到 X Layer testnet / mainnet（含 HookMiner 找盐）
@@ -39,11 +36,10 @@ script/
   DeployHelpers.sol    ← 测试 / 脚本共用部署逻辑
   HookMiner.sol        ← CREATE2 地址挖矿
 test/
-  ProphetHook.t.sol    ← 37 项集成测试（生命周期 / 计分 / 领取 / 派发 / 70-20-10 / stake 加成）
+  ProphetHook.t.sol    ← 36 项集成测试（生命周期 / 计分 / 领取 / 派发 / 70-20-10 / stake 加成）
   AlphaStaking.t.sol   ← 11 项质押 / 多币种奖励 / 折扣曲线测试
   ProphetCard.t.sol    ← SBT / SVG 渲染测试
   AlphaToken.t.sol     ← Mint / 上限 / 授权测试
-  AgentRegistry.t.sol  ← 注册 / 解押 / 罚没测试
   utils/ProphetHookTestBase.sol  ← v4 Deployers 接线
 ```
 
@@ -73,7 +69,7 @@ score = settledTick · netSize − weightedEntry
 
 含义：**你只在事后价格朝你预测方向走的部分得分**。完美的闭式解，O(1) 计算。
 
-### 3. 三方分润的奖励模型（v1.5 新增）
+### 3. 三方分润的奖励模型
 
 `payoutPot` 不再 winner-takes-all，而是按 **70 / 20 / 10** 把 pot 拆给三方：
 
@@ -96,7 +92,7 @@ LP 卖给「事后看是对的」交易者 → 这笔交易的 20% 又回到 LP 
 
 - **$ALPHA emission**：所有正分玩家按 `score/1e6`（每 epoch 单玩家 ≤1000 ALPHA）按比例铸币。
 
-### 4. 先知卡 SBT（致敬 uPEG）
+### 4. 先知卡 SBT
 
 每个玩家终身一张 NFT，每次 `claim()` 累计：`totalClaims / wins / championships / streak / lifetimeScore`。
 
@@ -112,25 +108,15 @@ LP 卖给「事后看是对的」交易者 → 这笔交易的 20% 又回到 LP 
 
 soulbound（不可转）—— 防止刷分账号被倒卖。
 
-### 5. AI Agent 集成（继承本项目灵魂）
+### 5. $ALPHA 质押的双重效用（让代币真的被需要）
 
-`AgentRegistry` 注册的 agent，根据其 reputation 获得 **1.00× ~ 1.50× 计分乘数**：
+质押 $ALPHA 到 `AlphaStaking`，立即解锁三档效用：
 
-```
-multiplier = 1.00 + reputation/10000 × 0.50
-```
-
-这给了 AI agent 一个无许可的竞技场：链上、可证的预测准确率排行榜。**预测越准 → 信誉越高 → 乘数越大 → 收益越高**。
-
-### 5.5. $ALPHA 质押的双重效用（v1.5 新增 · 让代币真的被需要）
-
-质押 $ALPHA 到 `AlphaStaking`，立即解锁三档效用，且 **agent 乘数与 stake 乘数可叠加**：
-
-| 效用           | 公式                                                             | 100k ALPHA 满档                                   |
-| -------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
-| **① 计分乘数** | `1.00x + min(stake, 100k)/100k × 1.00x`                          | **2.00x**（与 1.50x agent 乘数叠加 → 最高 3.00x） |
-| **② 抽水折扣** | `discount_bps = min(stake, 100k)/100k × 5000`                    | swap 自己的 prophet skim **直接打 5 折**          |
-| **③ 分红权**   | 拿 epoch pot 的 **10%**，按 stake 比例瓜分（多池多币种自动累计） | 任意时刻调 `staking.claim(currency)` 提取         |
+| 效用           | 公式                                                             | 100k ALPHA 满档                          |
+| -------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+| **① 计分乘数** | `1.00x + min(stake, 100k)/100k × 1.00x`                          | **2.00x**                                |
+| **② 抽水折扣** | `discount_bps = min(stake, 100k)/100k × 5000`                    | swap 自己的 prophet skim **直接打 5 折** |
+| **③ 分红权**   | 拿 epoch pot 的 **10%**，按 stake 比例瓜分（多池多币种自动累计） | 任意时刻调 `staking.claim(currency)` 提取 |
 
 防闪电贷：质押立刻生效但 **解押有 1 天冷却**（`requestUnstake` → 24h 后 `unstake`）。
 
@@ -150,7 +136,7 @@ swap 多 → pot 多 → 质押者分红多 → 锁仓深 → 流通量小
 - 单 trader 单 epoch 计分仓位封顶（`PER_EPOCH_NOTIONAL_CAP = 2^96-1`）—— 防巨鲸
 - `MIN_SIZE_TO_COUNT = 1000` —— 过滤 dust 刷分
 - pot 派发设 `CLAIM_WINDOW_EPOCHS = 1` 宽限期 —— 让更高分玩家有机会反超
-- 完全不可变 / 无 admin 路径修改历史 score —— 只有 oracle/registry 切换等参数级开关
+- 完全不可变 / 无 admin 路径修改历史 score —— 只有 staking / card 等参数级开关
 - 若无人正分：pot 自动滚入下一 epoch，**保证 pot 永远不被锁死**
 
 ---
@@ -202,7 +188,7 @@ poolManager.modifyLiquidity(key, params, "");
 # 编译
 forge build
 
-# 跑测试（73 项）
+# 跑测试（56 项）
 forge test -vv
 
 # 跑某一测试

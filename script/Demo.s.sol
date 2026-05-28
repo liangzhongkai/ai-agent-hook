@@ -22,7 +22,6 @@ import {ProphetHook} from "../src/ProphetHook.sol";
 import {ProphetCard} from "../src/ProphetCard.sol";
 import {AlphaToken, IAlphaToken} from "../src/AlphaToken.sol";
 import {AlphaStaking} from "../src/AlphaStaking.sol";
-import {AgentRegistry} from "../src/AgentRegistry.sol";
 
 /// @notice End-to-end demo: spins up a fresh PoolManager, deploys the entire Prophet stack,
 ///         configures a dynamic-fee pool, makes multi-trader swaps, settles, claims,
@@ -65,7 +64,6 @@ contract Demo is Script, StdCheats {
 
     AlphaToken internal alpha;
     AlphaStaking internal staking;
-    AgentRegistry internal registry;
     ProphetCard internal card;
     ProphetHook internal hook;
 
@@ -112,16 +110,15 @@ contract Demo is Script, StdCheats {
     // ============== STAGE 2: prophet stack ==============
     function _stage2_deployProphetStack() internal {
         console.log("");
-        console.log("===== STAGE 2: deploy AlphaToken / Registry / Card / Staking / Hook =====");
+        console.log("===== STAGE 2: deploy AlphaToken / Card / Staking / Hook =====");
         alpha = new AlphaToken();
-        registry = new AgentRegistry();
         card = new ProphetCard();
         staking = new AlphaStaking(IAlphaToken(address(alpha)));
 
         address hookAddr = address(uint160(uint256(type(uint160).max) & CLEAR_HOOK_FLAGS_MASK | HOOK_FLAGS));
         deployCodeTo(
             "ProphetHook.sol:ProphetHook",
-            abi.encode(manager, address(alpha), address(registry), address(card)),
+            abi.encode(manager, address(alpha), address(card), deployer),
             hookAddr
         );
         hook = ProphetHook(hookAddr);
@@ -132,7 +129,6 @@ contract Demo is Script, StdCheats {
         hook.setAlphaStaking(address(staking));
 
         console.log("AlphaToken  :", address(alpha));
-        console.log("Registry    :", address(registry));
         console.log("ProphetCard :", address(card));
         console.log("Staking     :", address(staking));
         console.log("ProphetHook :", address(hook));

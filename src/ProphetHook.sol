@@ -16,7 +16,6 @@ import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {IAgentRegistry} from "./AgentRegistry.sol";
 import {IAlphaToken} from "./AlphaToken.sol";
 import {IAlphaStaking} from "./AlphaStaking.sol";
 import {IProphetCard} from "./ProphetCard.sol";
@@ -141,19 +140,17 @@ contract ProphetHook is BaseHook, Ownable, IUnlockCallback {
     mapping(PoolId => mapping(uint64 => mapping(address => TraderEpoch))) public positions;
 
     IAlphaToken public alphaToken;
-    IAgentRegistry public agentRegistry;
     IProphetCard public prophetCard;
     /// @notice Optional. If set & has stakers, drives skim discount, score multiplier, and pot share.
     IAlphaStaking public alphaStaking;
 
     bool public alphaRewardsEnabled = true;
 
-    constructor(IPoolManager _poolManager, address _alphaToken, address _agentRegistry, address _prophetCard)
+    constructor(IPoolManager _poolManager, address _alphaToken, address _prophetCard, address owner_)
         BaseHook(_poolManager)
-        Ownable(msg.sender)
+        Ownable(owner_)
     {
         alphaToken = IAlphaToken(_alphaToken);
-        agentRegistry = IAgentRegistry(_agentRegistry);
         prophetCard = IProphetCard(_prophetCard);
     }
 
@@ -351,13 +348,6 @@ contract ProphetHook is BaseHook, Ownable, IUnlockCallback {
 
         score = _computeScore(e.settledTick, pos.netSize, pos.weightedEntry);
 
-        // optional agent multiplier (in [1.00x, 1.50x])
-        if (address(agentRegistry) != address(0) && agentRegistry.isRegistered(trader)) {
-            uint256 rep = agentRegistry.reputation(trader);
-            int256 multHundredths = int256(100 + (rep / 200)); // 100..150
-            score = (score * multHundredths) / 100;
-        }
-
         // optional $ALPHA stake multiplier (in [1.00x, 2.00x])
         if (address(alphaStaking) != address(0)) {
             uint256 stakeMultBps = alphaStaking.getScoreMultiplierBps(trader); // 10000..20000
@@ -547,10 +537,6 @@ contract ProphetHook is BaseHook, Ownable, IUnlockCallback {
 
     function setProphetCard(address card) external onlyOwner {
         prophetCard = IProphetCard(card);
-    }
-
-    function setAgentRegistry(address reg) external onlyOwner {
-        agentRegistry = IAgentRegistry(reg);
     }
 
     function setAlphaToken(address tok) external onlyOwner {

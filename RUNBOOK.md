@@ -30,7 +30,7 @@ anvil --version
 # 编译全量
 forge build
 
-# 跑全部 73 项测试
+# 跑全部 56 项测试
 forge test
 
 # 看每条 setup/log（含 console.log）
@@ -52,10 +52,10 @@ forge coverage
 期望输出：
 
 ```
-Ran 5 test suites: 73 tests passed, 0 failed, 0 skipped
+Ran 4 test suites: 56 tests passed, 0 failed, 0 skipped
 ```
 
-5 个 suite 分别是 `AlphaToken / AgentRegistry / ProphetCard / AlphaStaking / ProphetHook`。
+4 个 suite 分别是 `AlphaToken / ProphetCard / AlphaStaking / ProphetHook`。
 
 ---
 
@@ -257,7 +257,6 @@ forge script script/Deploy.s.sol:DeployXLayer \
 ```
 PoolManager:      0xA0B4c6737C0D4942A353368AD86eBbf24503Fbba
 AlphaToken:       0x1111...
-AgentRegistry:    0x2222...
 ProphetCard:      0x3333...
 AlphaStaking:     0x4444...
 ProphetHook:      0xfFff...00C8        ← 末位匹配 hook flags
@@ -268,7 +267,6 @@ Hook flags (hex): 0xc8
 
 ```bash
 export ALPHA=0x1111...
-export REGISTRY=0x2222...
 export CARD=0x3333...
 export STAKING=0x4444...
 export HOOK=0xfFff...00C8

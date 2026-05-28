@@ -9,7 +9,6 @@ import {ProphetHook} from "../src/ProphetHook.sol";
 import {ProphetCard} from "../src/ProphetCard.sol";
 import {AlphaToken, IAlphaToken} from "../src/AlphaToken.sol";
 import {AlphaStaking} from "../src/AlphaStaking.sol";
-import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {HookMiner} from "./HookMiner.sol";
 
 /// @notice Deploys the Prophet Hook stack to X Layer (testnet or mainnet).
@@ -30,16 +29,16 @@ contract DeployXLayer is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
+        address deployer = vm.addr(deployerPrivateKey);
+
         AlphaToken alpha = new AlphaToken();
-        AgentRegistry registry = new AgentRegistry();
         ProphetCard card = new ProphetCard();
         AlphaStaking staking = new AlphaStaking(IAlphaToken(address(alpha)));
 
         vm.stopBroadcast();
 
-        bytes memory constructorArgs = abi.encode(
-            IPoolManager(poolManagerAddr), address(alpha), address(registry), address(card)
-        );
+        bytes memory constructorArgs =
+            abi.encode(IPoolManager(poolManagerAddr), address(alpha), address(card), deployer);
 
         (address expectedHookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_FACTORY, HOOK_FLAGS, type(ProphetHook).creationCode, constructorArgs);
@@ -47,7 +46,7 @@ contract DeployXLayer is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         ProphetHook hook = new ProphetHook{salt: salt}(
-            IPoolManager(poolManagerAddr), address(alpha), address(registry), address(card)
+            IPoolManager(poolManagerAddr), address(alpha), address(card), deployer
         );
         require(address(hook) == expectedHookAddress, "DeployXLayer: hook address mismatch");
 
@@ -63,7 +62,6 @@ contract DeployXLayer is Script {
         console.log("====================================================");
         console.log("PoolManager:     ", poolManagerAddr);
         console.log("AlphaToken:      ", address(alpha));
-        console.log("AgentRegistry:   ", address(registry));
         console.log("ProphetCard:     ", address(card));
         console.log("AlphaStaking:    ", address(staking));
         console.log("ProphetHook:     ", address(hook));

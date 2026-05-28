@@ -9,7 +9,6 @@ import {ProphetHook} from "../src/ProphetHook.sol";
 import {ProphetCard} from "../src/ProphetCard.sol";
 import {AlphaToken} from "../src/AlphaToken.sol";
 import {AlphaStaking} from "../src/AlphaStaking.sol";
-import {AgentRegistry} from "../src/AgentRegistry.sol";
 
 /// @notice Shared deployment logic for scripts and tests.
 contract DeployHelpers is StdCheats {
@@ -21,7 +20,6 @@ contract DeployHelpers is StdCheats {
 
     struct ProphetStack {
         AlphaToken alpha;
-        AgentRegistry registry;
         ProphetCard card;
         AlphaStaking staking;
         ProphetHook hook;
@@ -33,14 +31,13 @@ contract DeployHelpers is StdCheats {
 
     function deploySystem(IPoolManager poolManager) external returns (ProphetStack memory s) {
         s.alpha = new AlphaToken();
-        s.registry = new AgentRegistry();
         s.card = new ProphetCard();
         s.staking = new AlphaStaking(IAlphaToken(address(s.alpha)));
 
         address hookAddr = hookAddress();
         deployCodeTo(
             "ProphetHook.sol:ProphetHook",
-            abi.encode(poolManager, address(s.alpha), address(s.registry), address(s.card)),
+            abi.encode(poolManager, address(s.alpha), address(s.card), address(this)),
             hookAddr
         );
         s.hook = ProphetHook(hookAddr);
