@@ -1,6 +1,6 @@
 # 先知池 · PROPHET HOOK
 
-> *Every swap is a prophecy. The pool remembers who was right.*
+> _Every swap is a prophecy. The pool remembers who was right._
 
 A Uniswap v4 hook submission for **OKX X Layer / Uniswap / Flap — "Hook the Future" Hackathon**
 ([rules](https://web3.okx.com/zh-hans/xlayer/build-x-hackathon/hook)).
@@ -14,12 +14,12 @@ A Uniswap v4 hook submission for **OKX X Layer / Uniswap / Flap — "Hook the Fu
 
 ## 为什么这是一个新机制（不是已有协议的移植）
 
-| 维度 | 现有 Hook 流派 | 本机制 |
-|---|---|---|
-| 动态费率 (CodesenSys/Bunni) | 用 EWMA 算 σ 调费 | 不是「调费」，而是 **把固定费用按事后真相重新分配** |
-| Bonding curve (SATO) | 用确定数学替换 AMM 曲线 | **保留 AMM**，把"预测对错"作为 **第二价值流** 叠加 |
-| NFT-from-swap (uPEG) | 余额跨过整数 → 生成图像 | NFT 是 **能力履历**（命中率/连胜/夺冠），不是装饰 |
-| 链上 AI (Slonks) | 把模型推理装进 hook | 把市场的 **群体智慧** 装进 hook，pool 自己就是 oracle |
+| 维度                        | 现有 Hook 流派          | 本机制                                                |
+| --------------------------- | ----------------------- | ----------------------------------------------------- |
+| 动态费率 (CodesenSys/Bunni) | 用 EWMA 算 σ 调费       | 不是「调费」，而是 **把固定费用按事后真相重新分配**   |
+| Bonding curve (SATO)        | 用确定数学替换 AMM 曲线 | **保留 AMM**，把"预测对错"作为 **第二价值流** 叠加    |
+| NFT-from-swap (uPEG)        | 余额跨过整数 → 生成图像 | NFT 是 **能力履历**（命中率/连胜/夺冠），不是装饰     |
+| 链上 AI (Slonks)            | 把模型推理装进 hook     | 把市场的 **群体智慧** 装进 hook，pool 自己就是 oracle |
 
 核心创新点：**第一个把 prediction market 隐式嵌入 spot AMM 的 hook**——不需要单独 UI、不需要事件 oracle、不需要外部价格源。
 
@@ -77,13 +77,14 @@ score = settledTick · netSize − weightedEntry
 
 `payoutPot` 不再 winner-takes-all，而是按 **70 / 20 / 10** 把 pot 拆给三方：
 
-| 份额 | 去向 | 实现方式 |
-|---|---|---|
-| **70%** | Top Prophet | `poolManager.take` 直接打给上一 epoch 的冠军 |
+| 份额    | 去向                          | 实现方式                                                                   |
+| ------- | ----------------------------- | -------------------------------------------------------------------------- |
+| **70%** | Top Prophet                   | `poolManager.take` 直接打给上一 epoch 的冠军                               |
 | **20%** | **LPs**（所有当前在区间内的） | `poolManager.donate` → 增 `feeGrowthGlobal`，所有 in-range LP 自动按份额拿 |
-| **10%** | **$ALPHA 质押者** | 转到 `AlphaStaking` 并触发 `notifyReward`，按 stake 比例累计 |
+| **10%** | **$ALPHA 质押者**             | 转到 `AlphaStaking` 并触发 `notifyReward`，按 stake 比例累计               |
 
 容灾：
+
 - LP 不在区间（流动性深度=0）→ 20% 自动归入 prophet 份额（不丢失）
 - 没有质押者 / 质押合约未设 → 10% 同样归入 prophet 份额
 - **没有人正分** → 整池滚入下一 epoch，pot 永不卡死
@@ -92,6 +93,7 @@ score = settledTick · netSize − weightedEntry
 LP 卖给「事后看是对的」交易者 → 这笔交易的 20% 又回到 LP 的 fee 增长里。
 
 另外仍保留：
+
 - **$ALPHA emission**：所有正分玩家按 `score/1e6`（每 epoch 单玩家 ≤1000 ALPHA）按比例铸币。
 
 ### 4. 先知卡 SBT（致敬 uPEG）
@@ -100,13 +102,13 @@ LP 卖给「事后看是对的」交易者 → 这笔交易的 20% 又回到 LP 
 
 链上 SVG 渲染、tier 自动晋级：
 
-| Tier | 条件 | 配色 |
-|---|---|---|
-| The Fool | 默认 | 灰 |
-| The Magician | ≥3 胜 | 绿 |
-| The Hierophant | ≥10 胜 | 紫 |
-| The Star | ≥1 次夺冠 | 青 |
-| The World | ≥5 次夺冠 | 金 |
+| Tier           | 条件      | 配色 |
+| -------------- | --------- | ---- |
+| The Fool       | 默认      | 灰   |
+| The Magician   | ≥3 胜     | 绿   |
+| The Hierophant | ≥10 胜    | 紫   |
+| The Star       | ≥1 次夺冠 | 青   |
+| The World      | ≥5 次夺冠 | 金   |
 
 soulbound（不可转）—— 防止刷分账号被倒卖。
 
@@ -124,15 +126,16 @@ multiplier = 1.00 + reputation/10000 × 0.50
 
 质押 $ALPHA 到 `AlphaStaking`，立即解锁三档效用，且 **agent 乘数与 stake 乘数可叠加**：
 
-| 效用 | 公式 | 100k ALPHA 满档 |
-|---|---|---|
-| **① 计分乘数** | `1.00x + min(stake, 100k)/100k × 1.00x` | **2.00x**（与 1.50x agent 乘数叠加 → 最高 3.00x） |
-| **② 抽水折扣** | `discount_bps = min(stake, 100k)/100k × 5000` | swap 自己的 prophet skim **直接打 5 折** |
-| **③ 分红权** | 拿 epoch pot 的 **10%**，按 stake 比例瓜分（多池多币种自动累计） | 任意时刻调 `staking.claim(currency)` 提取 |
+| 效用           | 公式                                                             | 100k ALPHA 满档                                   |
+| -------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| **① 计分乘数** | `1.00x + min(stake, 100k)/100k × 1.00x`                          | **2.00x**（与 1.50x agent 乘数叠加 → 最高 3.00x） |
+| **② 抽水折扣** | `discount_bps = min(stake, 100k)/100k × 5000`                    | swap 自己的 prophet skim **直接打 5 折**          |
+| **③ 分红权**   | 拿 epoch pot 的 **10%**，按 stake 比例瓜分（多池多币种自动累计） | 任意时刻调 `staking.claim(currency)` 提取         |
 
 防闪电贷：质押立刻生效但 **解押有 1 天冷却**（`requestUnstake` → 24h 后 `unstake`）。
 
 **飞轮闭环**：
+
 ```
 swap 多 → pot 多 → 质押者分红多 → 锁仓深 → 流通量小
    ↑                                        ↓
@@ -213,32 +216,20 @@ forge script script/Demo.s.sol:Demo -vv
 
 ## X Layer 网络配置
 
-| 参数 | 值 |
-|---|---|
-| 网络名称 | X Layer Testnet |
-| RPC URL | https://testrpc.xlayer.tech |
-| Chain ID | 195 |
-| 货币符号 | OKB |
-| 区块浏览器 | https://www.okx.com/explorer/xlayer-test |
-| Faucet | https://web3.okx.com/zh-hans/xlayer/faucet |
+| 参数       | 值                                         |
+| ---------- | ------------------------------------------ |
+| 网络名称   | X Layer Testnet                            |
+| RPC URL    | https://testrpc.xlayer.tech                |
+| Chain ID   | 195                                        |
+| 货币符号   | OKB                                        |
+| 区块浏览器 | https://www.okx.com/explorer/xlayer-test   |
+| Faucet     | https://web3.okx.com/zh-hans/xlayer/faucet |
 
 主网 RPC：`https://rpc.xlayer.tech`
 
 ---
 
-## 与 SATO / uPEG / Slonks 的对照
-
-| | SATO | uPEG | Slonks | **Prophet** |
-|---|---|---|---|---|
-| 切入点 | 替换 AMM 曲线 | afterSwap → SVG mint | hook 内 AI 推理 | beforeSwap 累加器 + skim |
-| 新资产 | sato 代币 | unicorn NFT | slonk NFT + $SLOP | Prophet Card SBT + $ALPHA |
-| Truth source | 数学公式 | 交易 fingerprint | 模型权重 | **池子的下一段 tick** |
-| Admin 风险 | 无 | 无 | 无 | 仅有可替换组件指针，不能修改任何 epoch 历史 |
-| Memetic | "数字稀缺" | "链上独角兽" | "AI 残次品" | "每笔 swap 都是一份预言" |
-
----
-
-## 路线图（赛事后）
+## 路线图
 
 - **TWAP settlement**：将 `settleEpoch` 改为最近 N 个 block 的 TWAP，进一步抗操纵
 - **Prophet Pass NFT 二级市场**：放开 SBT 的「委托使用权」让排行榜可被订阅
@@ -248,11 +239,5 @@ forge script script/Demo.s.sol:Demo -vv
 - **veALPHA / 锁仓加权**：解押冷却升级为 1m~4y 锁仓，时间越长乘数越高
 
 ---
-
-## License
-
-代码：BUSL-1.1（hook 核心）/ MIT（周边）
-
-提交：5 月 28 日 23:59 UTC 前通过 OKX 官方 Google Form。
 
 **Tag：`@XLayerOfficial` `@Uniswap` `@flapdotsh`**
