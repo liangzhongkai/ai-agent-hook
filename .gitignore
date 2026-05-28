@@ -13,12 +13,79 @@ lcov.info
 # Security analysis exports
 crytic-export/
 
-# Environment & secrets
+# ---------------------------------------------------------------------------
+# Environment & secrets — NEVER commit real values
+# ---------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
+.envrc
+.env.local
+.env.*.local
+*.local
+
+# Private keys & cryptographic key material
 *.pem
 *.key
+*.pk
+*.p12
+*.pfx
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.secret
+*.secrets
+
+# Ethereum keystore JSON (UTC--<timestamp>--<address>)
+UTC--*
+
+# Common private-key / wallet filenames
+private_key
+private_key.*
+private-key
+private-key.*
+*private_key*
+*private-key*
+wallet.json
+wallets.json
+accounts.json
+*.wallet
+
+# Mnemonic / seed phrase exports
+*mnemonic*
+*seed-phrase*
+*seedphrase*
+recovery-phrase*
+*.mnemonic
+*.seed
+
+# Credential & API key files
+secrets.json
+secrets.yaml
+secrets.yml
+.secrets
+credentials.json
+credentials.yaml
+credentials.yml
+*.credentials
+apikey
+apikey.*
+*.apikey
+*api_key*
+*api-key*
+
+# Directories that often hold key material
+secrets/
+private/
+keys/
+.wallets/
+.cast/
+
+# Anvil / local chain state (may embed funded accounts)
+anvil_state.json
+.anvil/
 
 # Docs (generated)
 docs/

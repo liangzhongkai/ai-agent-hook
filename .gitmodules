@@ -10,6 +10,4 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "deploy-v4-core/lib/v4-core"]
-	path = deploy-v4-core/lib/v4-core
-	url = https://github.com/Uniswap/v4-core
+

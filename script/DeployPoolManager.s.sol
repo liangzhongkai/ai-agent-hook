@@ -16,7 +16,5 @@ contract DeployPoolManager is Script {
 
         console.log("PoolManager deployed at:", address(poolManager));
         console.log("Owner:", initialOwner);
-
-
     }
 }
